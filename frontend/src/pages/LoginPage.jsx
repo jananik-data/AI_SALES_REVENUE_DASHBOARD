@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../api/client';
 
 export default function LoginPage() {
-  const { login, register, demoLogin, googleLogin, resetPassword } = useAuth();
+  const { login, register, googleLogin, resetPassword } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -26,7 +26,6 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
 
   // Forgot Password Modal State
   const [isForgotOpen, setIsForgotOpen] = useState(false);
@@ -106,31 +105,12 @@ export default function LoginPage() {
       if (err.response?.data?.detail) {
         setError(err.response.data.detail);
       } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError(`Unable to connect to backend server at ${API_BASE_URL}. If the backend was sleeping, please wait 30 seconds and try again.`);
+        setError(`Unable to connect to backend server at ${API_BASE_URL}. If the backend was sleeping, please wait a moment and try again.`);
       } else {
         setError('Authentication failed. Please check your credentials.');
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    setError(null);
-    setDemoLoading(true);
-    try {
-      await demoLogin();
-    } catch (err) {
-      console.error('Demo login error:', err);
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail);
-      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError(`Unable to connect to backend at ${API_BASE_URL}. Please check VITE_API_URL or wait for backend startup.`);
-      } else {
-        setError('Demo login failed. Please try again.');
-      }
-    } finally {
-      setDemoLoading(false);
     }
   };
 
@@ -501,45 +481,10 @@ export default function LoginPage() {
             type="submit"
             className="btn btn-primary"
             style={{ width: '100%', marginTop: '6px', padding: '11px' }}
-            disabled={loading || googleLoading || demoLoading}
+            disabled={loading || googleLoading}
           >
             <span>{loading ? 'Authenticating...' : isRegister ? 'Create Analyst Account' : 'Sign In to Dashboard'}</span>
             <ArrowRight size={16} />
-          </button>
-
-          {/* 1-Click Instant Demo Guest Login Button */}
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={loading || googleLoading || demoLoading}
-            style={{
-              width: '100%',
-              marginTop: '12px',
-              padding: '10px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'rgba(99, 102, 241, 0.12)',
-              border: '1px solid rgba(99, 102, 241, 0.35)',
-              color: '#a5b4fc',
-              fontSize: '12.5px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(99, 102, 241, 0.22)';
-              e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.55)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)';
-              e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.35)';
-            }}
-          >
-            <Sparkles size={15} color="#818cf8" />
-            <span>{demoLoading ? 'Launching Demo...' : '⚡ 1-Click Instant Demo Access (No Password)'}</span>
           </button>
         </form>
       </div>

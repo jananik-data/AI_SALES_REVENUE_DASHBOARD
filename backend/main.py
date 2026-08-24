@@ -17,10 +17,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS for local development and web clients
+# Configure CORS for local development and web clients (supports localhost, local IP, and Vercel domains)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

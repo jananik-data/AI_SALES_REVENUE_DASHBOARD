@@ -3,20 +3,14 @@ import axios from 'axios';
 const getApiBaseUrl = () => {
   let url = (import.meta.env.VITE_API_URL || '').trim();
   if (url) {
-    // Remove trailing slash and remove duplicate /api if included
     url = url.replace(/\/+$/, '');
     if (url.endsWith('/api')) {
       url = url.slice(0, -4);
     }
     return url;
   }
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:8000';
-    }
-    return `http://${window.location.hostname}:8000`;
-  }
-  return 'http://127.0.0.1:8000';
+  // Default directly to your live production Render backend
+  return 'https://ai-sales-revenue-dashboard-1.onrender.com';
 };
 
 const API_BASE_URL = getApiBaseUrl();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Upload, Trash2, Plus, RefreshCw } from 'lucide-react';
 import SalesTable from '../components/SalesTable';
-import api from '../api/client';
+import api, { API_BASE_URL } from '../api/client';
 
 export default function SalesDataPage({ filterOptions, onOpenUpload, onLoadDemo, isDemoLoading, refreshTrigger, setRefreshTrigger }) {
   const [sales, setSales] = useState([]);
@@ -61,7 +61,7 @@ export default function SalesDataPage({ filterOptions, onOpenUpload, onLoadDemo,
   };
 
   const handleExportCsv = () => {
-    window.location.href = 'http://127.0.0.1:8000/api/sales/export/csv';
+    window.location.href = `${API_BASE_URL}/api/sales/export/csv`;
   };
 
   return (

@@ -15,6 +15,7 @@ import {
 import { signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, googleProvider, isFirebaseConfigured } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api/client';
 
 export default function LoginPage() {
   const { login, register, googleLogin, resetPassword } = useAuth();
@@ -75,8 +76,9 @@ export default function LoginPage() {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         // User voluntarily closed popup window
       } else if (err.code === 'auth/unauthorized-domain') {
+        const currentDomain = window.location.hostname || 'your domain';
         setError(
-          'Domain localhost is not authorized in your Firebase Console. Go to Firebase Console -> Authentication -> Settings -> Authorized domains and add localhost.'
+          `Domain "${currentDomain}" is not authorized in your Firebase Console. Go to Firebase Console -> Authentication -> Settings -> Authorized domains and add "${currentDomain}".`
         );
       } else if (err.code === 'auth/popup-blocked') {
         setError('Popup was blocked by your browser. Please enable popups for this site and try again.');
@@ -100,7 +102,13 @@ export default function LoginPage() {
         await login(username.trim(), password);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Authentication failed. Please check your credentials.');
+      if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+        setError(`Unable to connect to backend server at ${API_BASE_URL}. Please ensure the backend is running and accessible on the network.`);
+      } else {
+        setError('Authentication failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

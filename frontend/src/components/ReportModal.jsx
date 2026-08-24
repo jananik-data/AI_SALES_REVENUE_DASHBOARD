@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Printer, X, CheckCircle } from 'lucide-react';
-import api from '../api/client';
+import { FileText, Download, Printer, TrendingUp, DollarSign, Award, AlertTriangle, RefreshCw, X } from 'lucide-react';
+import api, { API_BASE_URL } from '../api/client';
 
 export default function ReportModal({ isOpen, onClose }) {
   const [reportData, setReportData] = useState(null);
@@ -27,7 +27,7 @@ export default function ReportModal({ isOpen, onClose }) {
 
   const handlePrint = () => {
     const token = localStorage.getItem('sales_auth_token') || '';
-    const url = `http://127.0.0.1:8000/api/report/html?token=${encodeURIComponent(token)}`;
+    const url = `${API_BASE_URL}/api/report/html?token=${encodeURIComponent(token)}`;
     window.open(url, '_blank');
   };
 

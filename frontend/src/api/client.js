@@ -1,11 +1,34 @@
 import axios from 'axios';
 
+const getApiBaseUrl = () => {
+  let url = (import.meta.env.VITE_API_URL || '').trim();
+  if (url) {
+    // Remove trailing slash and remove duplicate /api if included
+    url = url.replace(/\/+$/, '');
+    if (url.endsWith('/api')) {
+      url = url.slice(0, -4);
+    }
+    return url;
+  }
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://127.0.0.1:8000';
+    }
+    return `http://${window.location.hostname}:8000`;
+  }
+  return 'http://127.0.0.1:8000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api',
+  baseURL: `${API_BASE_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+export { API_BASE_URL };
 
 // Attach JWT token automatically
 api.interceptors.request.use((config) => {

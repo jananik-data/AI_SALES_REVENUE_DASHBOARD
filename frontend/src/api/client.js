@@ -17,7 +17,7 @@ const getApiBaseUrl = () => {
     return url;
   }
   // Default directly to your live production Render backend
-  return 'https://ai-sales-revenue-dashboard-1.onrender.com';
+  return 'https://ai-sales-revenue-dashboard-2.onrender.com';
 };
 
 const API_BASE_URL = getApiBaseUrl();

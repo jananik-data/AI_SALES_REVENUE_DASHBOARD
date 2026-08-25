@@ -13,8 +13,9 @@ backend/__pycache__/
 *.pyd
 
 # Environment variables
-.env.local
-*.local
+.env
+.env.*
+!.env.example
 
 # Logs
 logs/
@@ -28,3 +29,8 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
+# Local database
+*.db
+
+# Generated ML models
+saved_models/*.joblib

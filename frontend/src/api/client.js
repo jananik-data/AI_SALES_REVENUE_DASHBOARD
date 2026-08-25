@@ -1,6 +1,13 @@
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
+  // If running on localhost or 127.0.0.1, prioritize local FastAPI backend
+  const isLocalhost = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocalhost) {
+    return 'http://localhost:8000';
+  }
+
   let url = (import.meta.env.VITE_API_URL || '').trim();
   if (url) {
     url = url.replace(/\/+$/, '');

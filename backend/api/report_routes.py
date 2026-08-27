@@ -1,12 +1,12 @@
 from fastapi import HTTPException
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, Header
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 from backend.database.db import get_db
 from backend.database.models import User
-from backend.services.auth_service import get_user_from_token
+from backend.services.auth_service import oauth2_scheme, get_user_from_token
 from backend.services.report_service import (
     generate_executive_report_json,
     generate_html_report,
@@ -15,97 +15,49 @@ from backend.services.report_service import (
 
 router = APIRouter(prefix="/api/report", tags=["Executive Reports"])
 
-def extract_token(token: Optional[str], authorization: Optional[str]) -> Optional[str]:
-    if token and token.strip():
-        return token.strip()
-    if authorization and authorization.strip():
-        auth = authorization.strip()
-        if auth.lower().startswith("bearer "):
-            return auth[7:].strip()
-        return auth
-    return None
+def resolve_report_user(
+    auth_token: Optional[str] = Depends(oauth2_scheme),
+    query_token: Optional[str] = Query(None, alias="token"),
+    db: Session = Depends(get_db)
+) -> User:
+    token = auth_token or query_token
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+    return get_user_from_token(token, db)
 
 @router.get("/summary")
 def get_report_summary(
-    token: Optional[str] = Query(None),
-    authorization: Optional[str] = Header(None),
+    user: User = Depends(resolve_report_user),
     db: Session = Depends(get_db)
 ):
-    import logging, traceback
-    logger = logging.getLogger("report_routes")
-    try:
-        token_str = extract_token(token, authorization)
-        logger.info(f"[REPORT SUMMARY] Token present: {bool(token_str)}")
-        user = get_user_from_token(token_str, db)
-        logger.info(f"[REPORT SUMMARY] User resolved: id={user.id}, email={user.email}")
-        result = generate_executive_report_json(db, user.id)
-        logger.info(f"[REPORT SUMMARY] KPIs status: {result.get('kpis', {}).get('status', 'ok')}, revenue: {result.get('kpis', {}).get('total_revenue', 0)}")
-        return result
-    except HTTPException as he:
-        logger.error(f"[REPORT SUMMARY] HTTPException: {he.status_code} - {he.detail}")
-        raise
-    except Exception as e:
-        logger.error(f"[REPORT SUMMARY] Unhandled error: {type(e).__name__}: {e}")
-        logger.error(traceback.format_exc())
-        return {
-            "report_title": "AI Sales & Revenue Executive Intelligence Report",
-            "generated_at": datetime.utcnow().strftime("%B %d, %Y - %H:%M UTC"),
-            "error_debug": f"{type(e).__name__}: {str(e)}",
-            "kpis": {"status": "error", "total_revenue": 0.0, "total_orders": 0, "average_order_value": 0.0},
-            "top_products": [],
-            "category_breakdown": {},
-            "regional_breakdown": [],
-            "monthly_trends": [],
-            "ml_model_overview": {"is_trained": False, "selected_model": "Baseline Multiplier", "metrics": {}}
-        }
+    return generate_executive_report_json(db, user.id)
 
 @router.get("/html", response_class=HTMLResponse)
 def get_html_report_view(
-    token: Optional[str] = Query(None),
-    authorization: Optional[str] = Header(None),
+    user: User = Depends(resolve_report_user),
     db: Session = Depends(get_db)
 ):
-    try:
-        token_str = extract_token(token, authorization)
-        user = get_user_from_token(token_str, db)
-        html_content = generate_html_report(db, user.id)
-        return HTMLResponse(content=html_content, status_code=200)
-    except HTTPException:
-        raise
-    except Exception:
-        fallback_html = "<html><body><h2>Executive Sales Report</h2><p>Report is currently initializing. Please refresh or load sales records.</p></body></html>"
-        return HTMLResponse(content=fallback_html, status_code=200)
+    html_content = generate_html_report(db, user.id)
+    return HTMLResponse(content=html_content, status_code=200)
 
 @router.get("/download")
 def download_sales_report(
     format: str = "csv",
-    token: Optional[str] = Query(None),
-    authorization: Optional[str] = Header(None),
+    user: User = Depends(resolve_report_user),
     db: Session = Depends(get_db)
 ):
-    try:
-        token_str = extract_token(token, authorization)
-        user = get_user_from_token(token_str, db)
-
-        if format == "html":
-            content = generate_html_report(db, user.id)
-            return Response(
-                content=content,
-                media_type="text/html",
-                headers={"Content-Disposition": "attachment; filename=Executive_Sales_Intelligence_Report.html"}
-            )
-        else:
-            content = generate_csv_sales_export(db, user.id)
-            return Response(
-                content=content,
-                media_type="text/csv",
-                headers={"Content-Disposition": "attachment; filename=Executive_Sales_Intelligence_Report.csv"}
-            )
-    except HTTPException:
-        raise
-    except Exception:
+    if format == "html":
+        content = generate_html_report(db, user.id)
         return Response(
-            content="EXECUTIVE SALES REPORT\nReport is currently unavailable. Please load sales records.\n",
+            content=content,
+            media_type="text/html",
+            headers={"Content-Disposition": "attachment; filename=Executive_Sales_Intelligence_Report.html"}
+        )
+    else:
+        content = generate_csv_sales_export(db, user.id)
+        return Response(
+            content=content,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=Executive_Sales_Intelligence_Report.csv"}
         )
+

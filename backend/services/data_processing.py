@@ -94,30 +94,38 @@ def clean_and_preprocess_dataframe(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict
     df["product"] = df["product"].fillna("Unknown Product").astype(str).str.strip()
     df["region"] = df["region"].fillna("General Region").astype(str).str.strip()
 
+    # Helper to parse formatted numeric strings ($1,250.00, 1,000, etc.)
+    def parse_numeric(series, default=0.0):
+        if series is None:
+            return pd.Series(default, index=df.index)
+        s_str = series.astype(str).str.replace(r"[^\d.-]", "", regex=True)
+        return pd.to_numeric(s_str, errors="coerce").fillna(default)
+
     # Quantity handling
     if "quantity" not in df.columns:
         df["quantity"] = 1
     else:
-        df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(1)
+        df["quantity"] = parse_numeric(df["quantity"], 1.0)
         df["quantity"] = df["quantity"].apply(lambda q: max(1, int(round(q))))
 
     # Price handling
     if "price" not in df.columns:
         if "revenue" in df.columns:
-            rev_numeric = pd.to_numeric(df["revenue"], errors="coerce").fillna(100.0)
-            df["price"] = rev_numeric / df["quantity"]
+            rev_numeric = parse_numeric(df["revenue"], 100.0)
+            df["price"] = (rev_numeric / df["quantity"]).round(2)
         else:
             df["price"] = 50.0
     else:
-        df["price"] = pd.to_numeric(df["price"], errors="coerce").fillna(50.0)
+        df["price"] = parse_numeric(df["price"], 50.0)
         df["price"] = df["price"].apply(lambda p: max(0.1, round(float(p), 2)))
 
     # Revenue calculation
     if "revenue" not in df.columns or df["revenue"].isnull().any():
         df["revenue"] = (df["quantity"] * df["price"]).round(2)
     else:
-        df["revenue"] = pd.to_numeric(df["revenue"], errors="coerce")
-        df["revenue"] = df["revenue"].fillna(df["quantity"] * df["price"]).round(2)
+        df["revenue"] = parse_numeric(df["revenue"], 0.0)
+        mask_zero_rev = df["revenue"] <= 0
+        df.loc[mask_zero_rev, "revenue"] = (df.loc[mask_zero_rev, "quantity"] * df.loc[mask_zero_rev, "price"]).round(2)
 
     # Clean extreme negative or infinite values
     df = df[df["quantity"] > 0]
@@ -148,7 +156,7 @@ def parse_sales_file(file_content: bytes, filename: str) -> Tuple[pd.DataFrame, 
     return clean_and_preprocess_dataframe(df)
 
 def save_dataframe_to_db(df: pd.DataFrame, user_id: int, db: Session) -> int:
-    """Save processed dataframe records into SQLite database for the user."""
+    """Save processed dataframe records into database for the user."""
     sales_to_insert = []
     for _, row in df.iterrows():
         sale = Sale(
@@ -163,7 +171,7 @@ def save_dataframe_to_db(df: pd.DataFrame, user_id: int, db: Session) -> int:
         )
         sales_to_insert.append(sale)
 
-    db.bulk_save_objects(sales_to_insert)
+    db.add_all(sales_to_insert)
     db.commit()
     return len(sales_to_insert)
 

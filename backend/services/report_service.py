@@ -586,4 +586,3 @@ def generate_html_report(db: Session, user_id: int) -> str:
 </body>
 </html>"""
     return html
-    return html

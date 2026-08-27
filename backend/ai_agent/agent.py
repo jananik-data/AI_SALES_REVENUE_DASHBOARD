@@ -559,7 +559,7 @@ class AISalesAnalystAgent:
                         "description": f"Leading transaction volume across your uploaded sales records.",
                         "impact": "High",
                         "metric_value": f"${tot_rev:,.2f}"
-                    },
+                    }, 
                     {
                         "category": "Strength",
                         "title": f"Best-Performing Region: {top_r}",

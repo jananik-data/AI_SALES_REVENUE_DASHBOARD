@@ -94,7 +94,10 @@ def get_dashboard_kpis(
     growth_rate = 12.4 # default benchmark
     try:
         df["dt"] = pd.to_datetime(df["date"], errors="coerce")
-        monthly = df.set_index("dt").resample("M")["revenue"].sum()
+        try:
+            monthly = df.set_index("dt").resample("ME")["revenue"].sum()
+        except ValueError:
+            monthly = df.set_index("dt").resample("M")["revenue"].sum()
         if len(monthly) >= 2 and monthly.iloc[-2] > 0:
             growth_rate = float(((monthly.iloc[-1] - monthly.iloc[-2]) / monthly.iloc[-2]) * 100.0)
     except Exception:
@@ -129,23 +132,49 @@ def get_dashboard_trends(
 
     df["dt"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["dt"])
+    if df.empty:
+        return []
 
-    # Aggregate monthly
-    grouped = df.set_index("dt").resample("M").agg(
-        revenue=("revenue", "sum"),
-        units=("quantity", "sum"),
-        orders=("quantity", "count")
-    ).reset_index()
+    # Aggregate monthly (defensively handle pandas version differences with "ME" / "M")
+    try:
+        grouped = df.set_index("dt").resample("ME").agg(
+            revenue=("revenue", "sum"),
+            units=("quantity", "sum"),
+            orders=("quantity", "count")
+        ).reset_index()
+    except ValueError:
+        grouped = df.set_index("dt").resample("M").agg(
+            revenue=("revenue", "sum"),
+            units=("quantity", "sum"),
+            orders=("quantity", "count")
+        ).reset_index()
 
     result = []
     for _, row in grouped.iterrows():
-        rev = round(float(row["revenue"]), 2)
-        ords = int(row["orders"])
+        # Safely extract and check values to prevent NaN or None errors
+        rev_val = row.get("revenue", 0.0)
+        units_val = row.get("units", 0)
+        ords_val = row.get("orders", 0)
+
+        rev = round(float(rev_val), 2) if pd.notna(rev_val) else 0.0
+        ords = int(ords_val) if pd.notna(ords_val) else 0
+        units = int(units_val) if pd.notna(units_val) else 0
         aov_val = round(rev / ords, 2) if ords > 0 else 0.0
+
+        # Handle dt conversion safely
+        dt_val = row.get("dt")
+        if pd.notna(dt_val):
+            if hasattr(dt_val, "strftime"):
+                period_str = dt_val.strftime("%Y-%m")
+            else:
+                period_str = str(dt_val)[:7]
+        else:
+            period_str = "N/A"
+
         result.append(TrendPoint(
-            period=row["dt"].strftime("%Y-%m"),
+            period=period_str,
             revenue=rev,
-            units=int(row["units"]),
+            units=units,
             orders=ords,
             aov=aov_val
         ))

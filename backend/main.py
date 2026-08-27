@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Add project root directory to sys.path to resolve 'backend.*' imports from any CWD
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database.db import init_db

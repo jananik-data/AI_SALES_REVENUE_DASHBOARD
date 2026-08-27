@@ -58,23 +58,27 @@ def generate_executive_report_json(db: Session, user_id: int) -> Dict[str, Any]:
             }
         }
 
-    kpis = sales_analysis_tool(db, user_id) or {}
-    products = product_performance_tool(db, user_id) or {}
-    regions = regional_breakdown_tool(db, user_id) or {}
-    trends = trend_analysis_tool(db, user_id) or {}
+    kpis = sales_analysis_tool(db, user_id, pre_df=df) or {}
+    products = product_performance_tool(db, user_id, pre_df=df) or {}
+    regions = regional_breakdown_tool(db, user_id, pre_df=df) or {}
+    trends = trend_analysis_tool(db, user_id, pre_df=df) or {}
     
-    predictor = RevenuePredictor(user_id=user_id)
-    if not predictor.is_trained and len(df) >= 10:
-        try:
-            predictor.train_and_evaluate(df)
-        except Exception:
-            pass
-
+    # Skip ML training on report generation to avoid timeouts on free-tier hosting
     ml_status = {
-        "is_trained": predictor.is_trained,
-        "selected_model": predictor.selected_model_name if predictor.is_trained else "Random Forest Regressor (Auto-Calibrated)",
-        "metrics": predictor.metrics or {}
+        "is_trained": False,
+        "selected_model": "Random Forest Regressor (Auto-Calibrated)",
+        "metrics": {}
     }
+    try:
+        predictor = RevenuePredictor(user_id=user_id)
+        if predictor.is_trained:
+            ml_status = {
+                "is_trained": True,
+                "selected_model": predictor.selected_model_name,
+                "metrics": predictor.metrics or {}
+            }
+    except Exception:
+        pass
 
     raw_report = {
         "report_title": "AI Sales & Revenue Executive Intelligence Report",

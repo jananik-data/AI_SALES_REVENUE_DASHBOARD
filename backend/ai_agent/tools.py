@@ -63,9 +63,9 @@ def get_sales_dataframe(db: Session, user_id: int) -> pd.DataFrame:
     df["region"] = df["region"].fillna("Unknown Region")
     return df
 
-def sales_analysis_tool(db: Session, user_id: int, **kwargs) -> Dict[str, Any]:
+def sales_analysis_tool(db: Session, user_id: int, pre_df: pd.DataFrame = None, **kwargs) -> Dict[str, Any]:
     """Calculate key KPIs and summary metrics across all sales."""
-    df = get_sales_dataframe(db, user_id)
+    df = pre_df if pre_df is not None else get_sales_dataframe(db, user_id)
     if df.empty:
         return {"status": "empty", "message": "No sales records found for this user."}
 
@@ -115,9 +115,9 @@ def sales_analysis_tool(db: Session, user_id: int, **kwargs) -> Dict[str, Any]:
 # Alias for sales_analysis_tool
 KPI_analysis_tool = sales_analysis_tool
 
-def product_performance_tool(db: Session, user_id: int, **kwargs) -> Dict[str, Any]:
+def product_performance_tool(db: Session, user_id: int, pre_df: pd.DataFrame = None, **kwargs) -> Dict[str, Any]:
     """Analyze high-performing and low-performing products with drivers."""
-    df = get_sales_dataframe(db, user_id)
+    df = pre_df if pre_df is not None else get_sales_dataframe(db, user_id)
     if df.empty:
         return {"status": "empty", "message": "No sales records found."}
 
@@ -176,9 +176,9 @@ def product_performance_tool(db: Session, user_id: int, **kwargs) -> Dict[str, A
 # Alias for product_performance_tool
 product_analysis_tool = product_performance_tool
 
-def regional_breakdown_tool(db: Session, user_id: int, **kwargs) -> Dict[str, Any]:
+def regional_breakdown_tool(db: Session, user_id: int, pre_df: pd.DataFrame = None, **kwargs) -> Dict[str, Any]:
     """Analyze geographic sales performance and growth drivers across regions."""
-    df = get_sales_dataframe(db, user_id)
+    df = pre_df if pre_df is not None else get_sales_dataframe(db, user_id)
     if df.empty:
         return {"status": "empty", "message": "No sales records found."}
 
@@ -231,9 +231,9 @@ def regional_breakdown_tool(db: Session, user_id: int, **kwargs) -> Dict[str, An
         "summary": f"{top_reg['region']} leads all regions with ${top_reg_rev:,.2f} ({top_reg_share:.1f}% share), while {low_reg['region']} trails with ${low_reg_rev:,.2f} ({low_reg_share:.1f}% share)."
     }
 
-def trend_analysis_tool(db: Session, user_id: int, **kwargs) -> Dict[str, Any]:
+def trend_analysis_tool(db: Session, user_id: int, pre_df: pd.DataFrame = None, **kwargs) -> Dict[str, Any]:
     """Extract monthly sales trajectories, seasonal peaks, and analyze revenue decreases."""
-    df = get_sales_dataframe(db, user_id)
+    df = pre_df if pre_df is not None else get_sales_dataframe(db, user_id)
     if df.empty:
         return {"status": "empty", "message": "No sales records found."}
 

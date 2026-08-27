@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Printer, TrendingUp, DollarSign, Award, AlertTriangle, RefreshCw, BarChart2 } from 'lucide-react';
 import api, { API_BASE_URL } from '../api/client';
-
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 export default function ReportsPage({ refreshTrigger = 0 }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,10 +24,23 @@ export default function ReportsPage({ refreshTrigger = 0 }) {
     }
   };
 
-  const handlePrint = () => {
-    const token = localStorage.getItem('sales_auth_token') || '';
-    const url = `${API_BASE_URL}/api/report/html?token=${encodeURIComponent(token)}`;
-    window.open(url, '_blank');
+  const handlePrint = async () => {
+    const input = document.getElementById('report-content');
+    if (!input) return;
+    
+    try {
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Executive_Sales_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF', err);
+      alert('Failed to generate PDF.');
+    }
   };
 
   const handleDownloadCsv = async () => {
@@ -109,7 +123,7 @@ export default function ReportsPage({ refreshTrigger = 0 }) {
           Generating executive sales report...
         </div>
       ) : (
-        <>
+        <div id="report-content" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* KPI Snapshot */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
             <div className="glass-card" style={{ padding: '20px' }}>
@@ -207,7 +221,7 @@ export default function ReportsPage({ refreshTrigger = 0 }) {
               The system evaluated Linear Regression and Random Forest Regression across 80% train / 20% test splits. The winning champion model (<strong>{report?.ml_model_overview?.selected_model}</strong>) is calibrated and actively used for real-time what-if forecasting and inventory planning.
             </p>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

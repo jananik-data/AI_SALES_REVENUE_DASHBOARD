@@ -19,32 +19,48 @@ def chat_with_sales_analyst(
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Question message cannot be empty.")
 
-    agent = AISalesAnalystAgent(user_id=user.id, db=db)
-    result = agent.chat(req.message)
+    try:
+        agent = AISalesAnalystAgent(user_id=user.id, db=db)
+        result = agent.chat(req.message)
 
-    # Log user message
-    user_log = ChatHistory(
-        user_id=user.id,
-        role="user",
-        message=req.message
-    )
-    db.add(user_log)
+        clean_tool_calls = []
+        for tc in result.get("tool_calls", []):
+            clean_tool_calls.append({
+                "tool_name": str(tc.get("tool_name", "")),
+                "arguments": tc.get("arguments", {}),
+                "output": tc.get("output", {})
+            })
 
-    # Log agent response
-    agent_log = ChatHistory(
-        user_id=user.id,
-        role="assistant",
-        message=result["reply"],
-        tool_calls_json=json.dumps(result.get("tool_calls", []))
-    )
-    db.add(agent_log)
-    db.commit()
+        # Log user message
+        user_log = ChatHistory(
+            user_id=user.id,
+            role="user",
+            message=req.message
+        )
+        db.add(user_log)
 
-    return AIChatResponse(
-        reply=result["reply"],
-        tool_calls=result.get("tool_calls", []),
-        generated_at=result.get("generated_at", datetime.utcnow().isoformat())
-    )
+        # Log agent response
+        agent_log = ChatHistory(
+            user_id=user.id,
+            role="assistant",
+            message=result.get("reply", "I have processed your query."),
+            tool_calls_json=json.dumps(clean_tool_calls, default=str)
+        )
+        db.add(agent_log)
+        db.commit()
+
+        return AIChatResponse(
+            reply=result.get("reply", "I have processed your query."),
+            tool_calls=clean_tool_calls,
+            generated_at=result.get("generated_at", datetime.utcnow().isoformat())
+        )
+    except Exception as e:
+        db.rollback()
+        return AIChatResponse(
+            reply="I encountered an issue analyzing your query. Please try rephrasing or asking about your sales data.",
+            tool_calls=[],
+            generated_at=datetime.utcnow().isoformat()
+        )
 
 @router.get("/insights", response_model=AIInsightsResponse)
 def get_ai_automated_insights(

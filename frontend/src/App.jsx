@@ -86,7 +86,7 @@ function AppContent() {
       case 'ai-agent':
         return <AIAgentPage />;
       case 'reports':
-        return <ReportsPage />;
+        return <ReportsPage refreshTrigger={refreshTrigger} />;
       default:
         return <DashboardPage filterOptions={filterOptions} refreshTrigger={refreshTrigger} />;
     }

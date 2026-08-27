@@ -196,50 +196,72 @@ def generate_csv_sales_export(db: Session, user_id: int) -> str:
     return output.getvalue()
 
 def generate_html_report(db: Session, user_id: int) -> str:
+    from backend.ai_agent.tools import safe_float, safe_int
     data = generate_executive_report_json(db, user_id)
-    kpis = data["kpis"]
+    kpis = data.get("kpis") or {}
     
-    prod_rows = "".join([
-        f"""<tr>
-            <td style="font-weight:600; color:#0f172a;">{p['product']}</td>
-            <td><span class="badge" style="background:#e0e7ff; color:#4338ca;">{p['category']}</span></td>
-            <td style="text-align:right;">{p['orders']}</td>
-            <td style="text-align:right;">{p['total_units']:,}</td>
-            <td style="text-align:right; font-weight:700; color:#059669;">${p['total_revenue']:,.2f}</td>
-            <td style="text-align:right; font-weight:600;">{p['revenue_pct']}%</td>
-        </tr>"""
-        for p in data["top_products"]
-    ])
+    tot_rev = safe_float(kpis.get("total_revenue"), 0.0)
+    tot_ord = safe_int(kpis.get("total_orders"), 0)
+    tot_units = safe_int(kpis.get("total_units_sold"), 0)
+    aov = safe_float(kpis.get("average_order_value"), 0.0)
+    top_p = str(kpis.get("top_product") or "Top Product")
+    top_r = str(kpis.get("top_region") or "Top Region")
+    growth_rate = safe_float(kpis.get("recent_mom_growth_pct", kpis.get("growth_rate")), 0.0)
+    ml_model_name = str((data.get("ml_model_overview") or {}).get("selected_model") or "Random Forest Regressor")
 
-    reg_rows = "".join([
-        f"""<tr>
-            <td style="font-weight:600; color:#0f172a;">{r['region']}</td>
-            <td style="text-align:right;">{r['total_orders']}</td>
-            <td style="text-align:right;">{r['total_units']:,}</td>
-            <td style="text-align:right; font-weight:700; color:#2563eb;">${r['total_revenue']:,.2f}</td>
-            <td style="text-align:right; font-weight:600;">{r['market_share_pct']}%</td>
-        </tr>"""
-        for r in data["regional_breakdown"]
-    ])
+    top_prods = data.get("top_products") or []
+    if not top_prods:
+        prod_rows = '<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:18px;">No product records available. Upload sales records or load sample data.</td></tr>'
+    else:
+        prod_rows = "".join([
+            f"""<tr>
+                <td style="font-weight:600; color:#0f172a;">{p.get('product', 'Unknown Product')}</td>
+                <td><span class="badge" style="background:#e0e7ff; color:#4338ca;">{p.get('category', 'General')}</span></td>
+                <td style="text-align:right;">{safe_int(p.get('orders'), 0):,}</td>
+                <td style="text-align:right;">{safe_int(p.get('total_units'), 0):,}</td>
+                <td style="text-align:right; font-weight:700; color:#059669;">${safe_float(p.get('total_revenue'), 0.0):,.2f}</td>
+                <td style="text-align:right; font-weight:600;">{safe_float(p.get('revenue_pct'), 0.0):.1f}%</td>
+            </tr>"""
+            for p in top_prods
+        ])
 
-    monthly_rows = "".join([
-        f"""<tr>
-            <td style="font-weight:600;">{m['period']}</td>
-            <td style="text-align:right; font-weight:700; color:#0f172a;">${m['revenue']:,.2f}</td>
-            <td style="text-align:right;">{m['units']:,}</td>
-            <td style="text-align:right;">{m['orders']}</td>
-            <td style="text-align:right; color:{'#059669' if m.get('pct_change', 0) >= 0 else '#dc2626'}; font-weight:600;">
-                {'+' if m.get('pct_change', 0) > 0 else ''}{m.get('pct_change', 0)}%
-            </td>
-        </tr>"""
-        for m in data["monthly_trends"][-8:]
-    ])
+    reg_breakdown = data.get("regional_breakdown") or []
+    if not reg_breakdown:
+        reg_rows = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:18px;">No regional territory records available.</td></tr>'
+    else:
+        reg_rows = "".join([
+            f"""<tr>
+                <td style="font-weight:600; color:#0f172a;">{r.get('region', 'Unknown Region')}</td>
+                <td style="text-align:right;">{safe_int(r.get('total_orders'), 0):,}</td>
+                <td style="text-align:right;">{safe_int(r.get('total_units'), 0):,}</td>
+                <td style="text-align:right; font-weight:700; color:#2563eb;">${safe_float(r.get('total_revenue'), 0.0):,.2f}</td>
+                <td style="text-align:right; font-weight:600;">{safe_float(r.get('market_share_pct'), 0.0):.1f}%</td>
+            </tr>"""
+            for r in reg_breakdown
+        ])
+
+    monthly_trends = data.get("monthly_trends") or []
+    if not monthly_trends:
+        monthly_rows = '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:18px;">No monthly trajectory records available.</td></tr>'
+    else:
+        monthly_rows = "".join([
+            f"""<tr>
+                <td style="font-weight:600;">{m.get('period', 'N/A')}</td>
+                <td style="text-align:right; font-weight:700; color:#0f172a;">${safe_float(m.get('revenue'), 0.0):,.2f}</td>
+                <td style="text-align:right;">{safe_int(m.get('units'), 0):,}</td>
+                <td style="text-align:right;">{safe_int(m.get('orders'), 0):,}</td>
+                <td style="text-align:right; color:{'#059669' if safe_float(m.get('pct_change'), 0.0) >= 0 else '#dc2626'}; font-weight:600;">
+                    {'+' if safe_float(m.get('pct_change'), 0.0) > 0 else ''}{safe_float(m.get('pct_change'), 0.0):.1f}%
+                </td>
+            </tr>"""
+            for m in monthly_trends[-8:]
+        ])
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
-    <title>{data['report_title']}</title>
+    <title>{data.get('report_title', 'Executive Sales Intelligence Report')}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -457,7 +479,7 @@ def generate_html_report(db: Session, user_id: int) -> str:
             <div>
                 <div class="brand-title">RevPulse <span>AI</span> Enterprise</div>
                 <div class="report-meta">Executive Sales & Revenue Performance Audit Report</div>
-                <div class="report-meta">Generated: <strong>{data['generated_at']}</strong></div>
+                <div class="report-meta">Generated: <strong>{data.get('generated_at', 'Current Session')}</strong></div>
             </div>
             <div class="doc-badge">
                 <div><strong>DOC REF:</strong> RPT-SALES-2026</div>
@@ -467,29 +489,29 @@ def generate_html_report(db: Session, user_id: int) -> str:
 
         <!-- Executive Narrative Summary -->
         <div class="executive-summary">
-            <strong>Executive Brief:</strong> The business recorded a total gross sales revenue of <strong>${kpis.get('total_revenue', 0):,.2f}</strong> across <strong>{kpis.get('total_orders', 0):,} order transactions</strong> with an Average Order Value (AOV) of <strong>${kpis.get('average_order_value', 0):,.2f}</strong>. The top-performing product portfolio is spearheaded by <strong>{kpis.get('top_product', 'Flagship Product')}</strong>, while the <strong>{kpis.get('top_region', 'North')}</strong> territory represents the primary geographical revenue engine.
+            <strong>Executive Brief:</strong> The business recorded a total gross sales revenue of <strong>${tot_rev:,.2f}</strong> across <strong>{tot_ord:,} order transactions</strong> with an Average Order Value (AOV) of <strong>${aov:,.2f}</strong>. The top-performing product portfolio is spearheaded by <strong>{top_p}</strong>, while the <strong>{top_r}</strong> territory represents the primary geographical revenue engine.
         </div>
 
         <!-- KPI Summary Cards -->
         <div class="kpi-grid">
             <div class="kpi-card">
                 <div class="kpi-label">Total Revenue</div>
-                <div class="kpi-val" style="color: #059669;">${kpis.get('total_revenue', 0):,.2f}</div>
-                <div class="kpi-sub">+{kpis.get('growth_rate', 12.4)}% growth trajectory</div>
+                <div class="kpi-val" style="color: #059669;">${tot_rev:,.2f}</div>
+                <div class="kpi-sub">+{growth_rate:.1f}% growth trajectory</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Total Transactions</div>
-                <div class="kpi-val">{kpis.get('total_orders', 0):,}</div>
+                <div class="kpi-val">{tot_ord:,}</div>
                 <div style="font-size:11px; color:#64748b; margin-top:4px;">Orders completed</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Gross Units Sold</div>
-                <div class="kpi-val" style="color: #2563eb;">{kpis.get('total_units_sold', 0):,}</div>
+                <div class="kpi-val" style="color: #2563eb;">{tot_units:,}</div>
                 <div style="font-size:11px; color:#64748b; margin-top:4px;">Total item volume</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Average Order Value</div>
-                <div class="kpi-val" style="color: #d97706;">${kpis.get('average_order_value', 0):,.2f}</div>
+                <div class="kpi-val" style="color: #d97706;">${aov:,.2f}</div>
                 <div style="font-size:11px; color:#64748b; margin-top:4px;">Revenue per order</div>
             </div>
         </div>
@@ -549,7 +571,7 @@ def generate_html_report(db: Session, user_id: int) -> str:
         <!-- ML & Intelligence Status -->
         <h2>🔮 Machine Learning Forecasting & Predictive Intelligence</h2>
         <div class="ml-box">
-            <div class="ml-title">Champion Model: {data['ml_model_overview']['selected_model']} (Calibrated)</div>
+            <div class="ml-title">Champion Model: {ml_model_name} (Calibrated)</div>
             <div class="ml-desc">
                 Machine learning revenue forecasting models (Random Forest Regressor vs Linear Regression) were evaluated using split-validation. The winning champion model is actively used to forecast quarterly sales and what-if inventory scenarios with confidence interval bounds.
             </div>
@@ -563,4 +585,5 @@ def generate_html_report(db: Session, user_id: int) -> str:
     </div>
 </body>
 </html>"""
+    return html
     return html

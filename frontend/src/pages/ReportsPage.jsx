@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Download, Printer, TrendingUp, DollarSign, Award, AlertTriangle, RefreshCw, BarChart2 } from 'lucide-react';
 import api, { API_BASE_URL } from '../api/client';
 
-export default function ReportsPage() {
+export default function ReportsPage({ refreshTrigger = 0 }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     fetchReport();
-  }, []);
+  }, [refreshTrigger]);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -115,28 +115,28 @@ export default function ReportsPage() {
             <div className="glass-card" style={{ padding: '20px' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Revenue</div>
               <div className="gradient-text-emerald" style={{ fontSize: '24px', fontWeight: 800, marginTop: '6px' }}>
-                ${kpis?.total_revenue?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${(kpis?.total_revenue ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
 
             <div className="glass-card" style={{ padding: '20px' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Transactions</div>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#f8fafc', marginTop: '6px' }}>
-                {kpis?.total_orders?.toLocaleString()}
+                {(kpis?.total_orders ?? 0).toLocaleString()}
               </div>
             </div>
 
             <div className="glass-card" style={{ padding: '20px' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Gross Units Sold</div>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#38bdf8', marginTop: '6px' }}>
-                {kpis?.total_units_sold?.toLocaleString()}
+                {(kpis?.total_units_sold ?? 0).toLocaleString()}
               </div>
             </div>
 
             <div className="glass-card" style={{ padding: '20px' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Average Order Value</div>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#fbbf24', marginTop: '6px' }}>
-                ${kpis?.average_order_value?.toFixed(2)}
+                ${(kpis?.average_order_value ?? 0).toFixed(2)}
               </div>
             </div>
           </div>

@@ -16,6 +16,8 @@ REPORTS_DIR.mkdir(exist_ok=True)
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/sales_dashboard.db")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # JWT & Security
 SECRET_KEY = os.getenv("SECRET_KEY", "ai_sales_revenue_super_secret_key_2026_x789")

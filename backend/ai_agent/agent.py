@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from backend.config import GEMINI_API_KEY
 from backend.database.models import ChatHistory
 from backend.ai_agent.tools import (
+    safe_float,
+    safe_int,
     get_sales_dataframe,
     sales_analysis_tool,
     KPI_analysis_tool,
@@ -463,8 +465,83 @@ class AISalesAnalystAgent:
 
     def generate_automated_insights(self) -> Dict[str, Any]:
         """Generate structured SWOT and metric cards."""
-        kpis = sales_analysis_tool(self.db, self.user_id)
-        if kpis.get("status") == "empty":
+        try:
+            kpis = sales_analysis_tool(self.db, self.user_id) or {}
+            if not kpis or kpis.get("status") == "empty":
+                return {
+                    "summary": "No data available yet. Please upload sales records.",
+                    "insights": [],
+                    "recommendations": ["Upload a sales dataset to unlock automated business insights."],
+                    "generated_at": datetime.utcnow().isoformat()
+                }
+
+            products = product_performance_tool(self.db, self.user_id) or {}
+            regions = regional_breakdown_tool(self.db, self.user_id) or {}
+
+            best_prod_dict = (products.get("best_product") or {}) if isinstance(products.get("best_product"), dict) else {}
+            top_region_dict = (regions.get("top_region") or {}) if isinstance(regions.get("top_region"), dict) else {}
+            lowest_region_dict = (regions.get("lowest_region") or {}) if isinstance(regions.get("lowest_region"), dict) else {}
+
+            top_p = str(best_prod_dict.get("product") or kpis.get("top_product") or "Top Product")
+            top_p_rev = safe_float(best_prod_dict.get("total_revenue"), safe_float(kpis.get("top_product_revenue"), 0.0))
+            top_p_pct = safe_float(best_prod_dict.get("revenue_percentage"), 0.0)
+
+            top_r = str(top_region_dict.get("region") or kpis.get("top_region") or "Top Region")
+            top_r_rev = safe_float(kpis.get("top_region_revenue"), safe_float(top_region_dict.get("revenue"), 0.0))
+            top_r_share = safe_float(top_region_dict.get("market_share_pct"), 0.0)
+
+            low_r = str(lowest_region_dict.get("region") or "Lowest Region")
+            low_r_share = safe_float(lowest_region_dict.get("market_share_pct"), 0.0)
+
+            total_rev = safe_float(kpis.get("total_revenue"), 0.0)
+            total_orders = safe_int(kpis.get("total_orders"), 0)
+            aov = safe_float(kpis.get("average_order_value"), 0.0)
+
+            insights = [
+                {
+                    "category": "Strength",
+                    "title": f"Best-Selling Product: {top_p}",
+                    "description": f"This is your #1 top product, generating ${top_p_rev:,.2f} ({top_p_pct:.1f}% of total sales). Keep plenty in stock to meet high customer demand.",
+                    "impact": "High",
+                    "metric_value": f"${top_p_rev:,.2f}"
+                },
+                {
+                    "category": "Strength",
+                    "title": f"Best-Performing Region: {top_r}",
+                    "description": f"{top_r} is your strongest sales area, bringing in ${top_r_rev:,.2f} ({top_r_share:.1f}% of total sales). Keep your marketing strong here to maintain your lead.",
+                    "impact": "High",
+                    "metric_value": f"{top_r_share:.1f}% Share"
+                },
+                {
+                    "category": "Growth Opportunity",
+                    "title": f"Growth Opportunity in {low_r}",
+                    "description": f"{low_r} is currently your lowest-selling area ({low_r_share:.1f}% of sales). Running special promotions here can help you attract new customers.",
+                    "impact": "Medium",
+                    "metric_value": "Growth"
+                },
+                {
+                    "category": "Trend",
+                    "title": "Average Order Value",
+                    "description": f"Customers spend an average of ${aov:.2f} per order. Offering product bundles or add-ons can encourage customers to buy more.",
+                    "impact": "Medium",
+                    "metric_value": f"${aov:.2f}"
+                }
+            ]
+
+            recommendations = [
+                f"Focus on increasing {top_p} sales in the {low_r} region.",
+                f"Maintain the strong sales performance in the {top_r} region.",
+                "Offer special bundle discounts on slower-selling products to boost total orders.",
+                f"Stock up on {top_p} before busy months to prevent running out of stock."
+            ]
+
+            return {
+                "summary": f"Your business has generated ${total_rev:,.2f} in total sales across {total_orders:,} orders. Your best-selling item is {top_p}, and your top sales area is the {top_r} region.",
+                "insights": insights,
+                "recommendations": recommendations,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        except Exception:
             return {
                 "summary": "No data available yet. Please upload sales records.",
                 "insights": [],
@@ -472,123 +549,82 @@ class AISalesAnalystAgent:
                 "generated_at": datetime.utcnow().isoformat()
             }
 
-        products = product_performance_tool(self.db, self.user_id)
-        regions = regional_breakdown_tool(self.db, self.user_id)
-
-        top_p = products.get("best_product", {}).get("product", kpis.get("top_product", "Top Product"))
-        top_r = regions.get("top_region", {}).get("region", kpis.get("top_region", "Top Region"))
-        low_r = regions.get("lowest_region", {}).get("region", "Lowest Region")
-
-        insights = [
-            {
-                "category": "Strength",
-                "title": f"Best-Selling Product: {top_p}",
-                "description": f"This is your #1 top product, generating ${products.get('best_product', {}).get('total_revenue', 0):,.2f} ({products.get('best_product', {}).get('revenue_percentage', 25)}% of total sales). Keep plenty in stock to meet high customer demand.",
-                "impact": "High",
-                "metric_value": f"${kpis.get('top_product_revenue', 0):,.2f}"
-            },
-            {
-                "category": "Strength",
-                "title": f"Best-Performing Region: {top_r}",
-                "description": f"{top_r} is your strongest sales area, bringing in ${kpis.get('top_region_revenue', 0):,.2f} ({regions.get('top_region', {}).get('market_share_pct', 30)}% of total sales). Keep your marketing strong here to maintain your lead.",
-                "impact": "High",
-                "metric_value": f"{regions.get('top_region', {}).get('market_share_pct', 30)}% Share"
-            },
-            {
-                "category": "Growth Opportunity",
-                "title": f"Growth Opportunity in {low_r}",
-                "description": f"{low_r} is currently your lowest-selling area ({regions.get('lowest_region', {}).get('market_share_pct', 10)}% of sales). Running special promotions here can help you attract new customers.",
-                "impact": "Medium",
-                "metric_value": "Growth"
-            },
-            {
-                "category": "Trend",
-                "title": "Average Order Value",
-                "description": f"Customers spend an average of ${kpis.get('average_order_value', 0):.2f} per order. Offering product bundles or add-ons can encourage customers to buy more.",
-                "impact": "Medium",
-                "metric_value": f"${kpis.get('average_order_value', 0):.2f}"
-            }
-        ]
-
-        recommendations = [
-            f"Focus on increasing {top_p} sales in the {low_r} region.",
-            f"Maintain the strong sales performance in the {top_r} region.",
-            "Offer special bundle discounts on slower-selling products to boost total orders.",
-            f"Stock up on {top_p} before busy months to prevent running out of stock."
-        ]
-
-        return {
-            "summary": f"Your business has generated ${kpis.get('total_revenue', 0):,.2f} in total sales across {kpis.get('total_orders', 0):,} orders. Your best-selling item is {top_p}, and your top sales area is the {top_r} region.",
-            "insights": insights,
-            "recommendations": recommendations,
-            "generated_at": datetime.utcnow().isoformat()
-        }
-
     def generate_anomaly_alerts(self) -> Dict[str, Any]:
         """Detect and structure real-time sales anomalies and smart alerts."""
-        kpis = sales_analysis_tool(self.db, self.user_id)
-        if kpis.get("status") == "empty":
+        try:
+            kpis = sales_analysis_tool(self.db, self.user_id) or {}
+            if not kpis or kpis.get("status") == "empty":
+                return {"alerts": [], "unread_count": 0, "generated_at": datetime.utcnow().isoformat()}
+
+            products = product_performance_tool(self.db, self.user_id) or {}
+            regions = regional_breakdown_tool(self.db, self.user_id) or {}
+
+            best_prod_dict = (products.get("best_product") or {}) if isinstance(products.get("best_product"), dict) else {}
+            top_region_dict = (regions.get("top_region") or {}) if isinstance(regions.get("top_region"), dict) else {}
+            lowest_region_dict = (regions.get("lowest_region") or {}) if isinstance(regions.get("lowest_region"), dict) else {}
+
+            top_p = str(best_prod_dict.get("product") or kpis.get("top_product") or "Top Product")
+            top_p_rev = safe_float(best_prod_dict.get("total_revenue"), safe_float(kpis.get("top_product_revenue"), 0.0))
+
+            top_r = str(top_region_dict.get("region") or kpis.get("top_region") or "Top Region")
+            top_r_rev = safe_float(kpis.get("top_region_revenue"), safe_float(top_region_dict.get("revenue"), 0.0))
+            top_r_share = safe_float(top_region_dict.get("market_share_pct"), 0.0)
+
+            low_r = str(lowest_region_dict.get("region") or "Central")
+            low_r_rev = safe_float(lowest_region_dict.get("revenue"), 0.0)
+            low_r_share = safe_float(lowest_region_dict.get("market_share_pct"), 0.0)
+
+            aov = safe_float(kpis.get("average_order_value"), 0.0)
+            total_orders = safe_int(kpis.get("total_orders"), 0)
+
+            alerts = [
+                {
+                    "id": "alert-1",
+                    "type": "spike",
+                    "severity": "Positive",
+                    "title": f"Demand Surge in {top_r}",
+                    "message": f"Strong sales acceleration detected: {top_p} in {top_r} generated ${top_r_rev:,.2f} ({top_r_share:.1f}% of total revenue).",
+                    "metric": f"+{top_r_share:.1f}% Share",
+                    "timestamp": "2h ago",
+                    "is_read": False
+                },
+                {
+                    "id": "alert-2",
+                    "type": "risk",
+                    "severity": "High Priority",
+                    "title": f"Stockout Risk for {top_p}",
+                    "message": f"Heavy customer demand for {top_p} (${top_p_rev:,.2f} total). Ensure inventory replenishment is scheduled ahead of peak volume.",
+                    "metric": "High Velocity",
+                    "timestamp": "5h ago",
+                    "is_read": False
+                },
+                {
+                    "id": "alert-3",
+                    "type": "drop",
+                    "severity": "Attention",
+                    "title": f"Regional Sales Lag in {low_r}",
+                    "message": f"{low_r} territory accounts for only {low_r_share:.1f}% of total volume (${low_r_rev:,.2f}). Running targeted discounts can boost conversions.",
+                    "metric": f"{low_r_share:.1f}% Baseline",
+                    "timestamp": "1d ago",
+                    "is_read": False
+                },
+                {
+                    "id": "alert-4",
+                    "type": "opportunity",
+                    "severity": "Opportunity",
+                    "title": "AOV Expansion Window",
+                    "message": f"Average transaction value is ${aov:.2f} across {total_orders:,} orders. Cross-selling accessory bundles can lift cart totals by 10-15%.",
+                    "metric": f"${aov:.2f} AOV",
+                    "timestamp": "2d ago",
+                    "is_read": False
+                }
+            ]
+
+            return {
+                "alerts": alerts,
+                "unread_count": len(alerts),
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        except Exception:
             return {"alerts": [], "unread_count": 0, "generated_at": datetime.utcnow().isoformat()}
 
-        products = product_performance_tool(self.db, self.user_id)
-        regions = regional_breakdown_tool(self.db, self.user_id)
-        
-        top_p = products.get("best_product", {}).get("product", kpis.get("top_product", "Top Product"))
-        top_p_rev = products.get("best_product", {}).get("total_revenue", 0)
-        top_r = regions.get("top_region", {}).get("region", kpis.get("top_region", "Top Region"))
-        top_r_rev = kpis.get("top_region_revenue", 0)
-        top_r_share = regions.get("top_region", {}).get("market_share_pct", 30)
-        low_r = regions.get("lowest_region", {}).get("region", "Central")
-        low_r_rev = regions.get("lowest_region", {}).get("revenue", 0)
-        low_r_share = regions.get("lowest_region", {}).get("market_share_pct", 10)
-        aov = kpis.get("average_order_value", 0)
-        total_orders = kpis.get("total_orders", 0)
-
-        alerts = [
-            {
-                "id": "alert-1",
-                "type": "spike",
-                "severity": "Positive",
-                "title": f"Demand Surge in {top_r}",
-                "message": f"Strong sales acceleration detected: {top_p} in {top_r} generated ${top_r_rev:,.2f} ({top_r_share}% of total revenue).",
-                "metric": f"+{top_r_share}% Share",
-                "timestamp": "2h ago",
-                "is_read": False
-            },
-            {
-                "id": "alert-2",
-                "type": "risk",
-                "severity": "High Priority",
-                "title": f"Stockout Risk for {top_p}",
-                "message": f"Heavy customer demand for {top_p} (${top_p_rev:,.2f} total). Ensure inventory replenishment is scheduled ahead of peak volume.",
-                "metric": "High Velocity",
-                "timestamp": "5h ago",
-                "is_read": False
-            },
-            {
-                "id": "alert-3",
-                "type": "drop",
-                "severity": "Attention",
-                "title": f"Regional Sales Lag in {low_r}",
-                "message": f"{low_r} territory accounts for only {low_r_share}% of total volume (${low_r_rev:,.2f}). Running targeted discounts can boost conversions.",
-                "metric": f"{low_r_share}% Baseline",
-                "timestamp": "1d ago",
-                "is_read": False
-            },
-            {
-                "id": "alert-4",
-                "type": "opportunity",
-                "severity": "Opportunity",
-                "title": "AOV Expansion Window",
-                "message": f"Average transaction value is ${aov:.2f} across {total_orders:,} orders. Cross-selling accessory bundles can lift cart totals by 10-15%.",
-                "metric": f"${aov:.2f} AOV",
-                "timestamp": "2d ago",
-                "is_read": False
-            }
-        ]
-
-        return {
-            "alerts": alerts,
-            "unread_count": len(alerts),
-            "generated_at": datetime.utcnow().isoformat()
-        }

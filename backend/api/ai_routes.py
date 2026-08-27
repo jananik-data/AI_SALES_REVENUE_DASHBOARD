@@ -51,23 +51,37 @@ def get_ai_automated_insights(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    agent = AISalesAnalystAgent(user_id=user.id, db=db)
-    res = agent.generate_automated_insights()
-
-    return AIInsightsResponse(
-        summary=res["summary"],
-        insights=res["insights"],
-        recommendations=res["recommendations"],
-        generated_at=res["generated_at"]
-    )
+    try:
+        agent = AISalesAnalystAgent(user_id=user.id, db=db)
+        res = agent.generate_automated_insights()
+        return AIInsightsResponse(
+            summary=res.get("summary", "No insights available."),
+            insights=res.get("insights", []),
+            recommendations=res.get("recommendations", []),
+            generated_at=res.get("generated_at", datetime.utcnow().isoformat())
+        )
+    except Exception:
+        return AIInsightsResponse(
+            summary="No sales data available yet. Please upload sales records.",
+            insights=[],
+            recommendations=["Upload a sales dataset to unlock automated business insights."],
+            generated_at=datetime.utcnow().isoformat()
+        )
 
 @router.get("/alerts")
 def get_ai_anomaly_alerts(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    agent = AISalesAnalystAgent(user_id=user.id, db=db)
-    return agent.generate_anomaly_alerts()
+    try:
+        agent = AISalesAnalystAgent(user_id=user.id, db=db)
+        return agent.generate_anomaly_alerts()
+    except Exception:
+        return {
+            "alerts": [],
+            "unread_count": 0,
+            "generated_at": datetime.utcnow().isoformat()
+        }
 
 @router.get("/chat-history")
 def get_chat_history(

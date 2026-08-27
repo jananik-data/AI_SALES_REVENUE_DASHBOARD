@@ -31,17 +31,27 @@ def get_report_summary(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
+    import logging, traceback
+    logger = logging.getLogger("report_routes")
     try:
         token_str = extract_token(token, authorization)
+        logger.info(f"[REPORT SUMMARY] Token present: {bool(token_str)}")
         user = get_user_from_token(token_str, db)
-        return generate_executive_report_json(db, user.id)
-    except HTTPException:
+        logger.info(f"[REPORT SUMMARY] User resolved: id={user.id}, email={user.email}")
+        result = generate_executive_report_json(db, user.id)
+        logger.info(f"[REPORT SUMMARY] KPIs status: {result.get('kpis', {}).get('status', 'ok')}, revenue: {result.get('kpis', {}).get('total_revenue', 0)}")
+        return result
+    except HTTPException as he:
+        logger.error(f"[REPORT SUMMARY] HTTPException: {he.status_code} - {he.detail}")
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"[REPORT SUMMARY] Unhandled error: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
         return {
             "report_title": "AI Sales & Revenue Executive Intelligence Report",
             "generated_at": datetime.utcnow().strftime("%B %d, %Y - %H:%M UTC"),
-            "kpis": {"status": "empty", "total_revenue": 0.0, "total_orders": 0, "average_order_value": 0.0},
+            "error_debug": f"{type(e).__name__}: {str(e)}",
+            "kpis": {"status": "error", "total_revenue": 0.0, "total_orders": 0, "average_order_value": 0.0},
             "top_products": [],
             "category_breakdown": {},
             "regional_breakdown": [],

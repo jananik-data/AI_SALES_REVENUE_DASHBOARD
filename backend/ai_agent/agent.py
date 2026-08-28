@@ -293,39 +293,52 @@ def run_conversational_analyst(message: str, db: Session, user_id: int) -> Dict[
 
     # 9. Trends & Revenue Drops
     if intent == "trend":
-        trend_data = trend_analysis_tool(db, user_id)
+        trend_data = trend_analysis_tool(db, user_id) or {}
         tool_calls.append({"tool_name": "trend_analysis_tool", "arguments": {"user_id": user_id}, "output": trend_data})
         
-        peak = trend_data.get("peak_month", {})
-        avg_rev = trend_data.get("average_monthly_revenue", 0)
+        peak = trend_data.get("peak_month") or {}
+        avg_rev = safe_float(trend_data.get("average_monthly_revenue"), 0.0)
         dec = trend_data.get("decrease_analysis")
         
-        reply = f"Your monthly revenue averages **${avg_rev:,.2f}**, peaking in **{peak.get('period')}** at **${peak.get('revenue', 0):,.2f}**. "
-        if dec:
-            reply += f"The most notable decrease occurred in **{dec['drop_period']}**, dropping **{dec['decrease_percentage']}%** compared to {dec['previous_period']} due to normalized post-holiday transaction volume."
+        peak_period = str(peak.get("period", "peak month"))
+        peak_rev = safe_float(peak.get("revenue"), 0.0)
+        
+        reply = f"Your monthly revenue averages **${avg_rev:,.2f}**, peaking in **{peak_period}** at **${peak_rev:,.2f}**. "
+        if dec and isinstance(dec, dict) and dec.get("drop_period"):
+            drop_p = dec.get("drop_period", "the recent period")
+            dec_pct = dec.get("decrease_percentage", 0)
+            prev_p = dec.get("previous_period", "the prior month")
+            dec_exp = dec.get("explanation")
+            if dec_exp:
+                reply += f"{dec_exp}"
+            else:
+                reply += f"The most notable decrease occurred in **{drop_p}**, dropping **{dec_pct}%** compared to {prev_p} due to normalized post-holiday transaction volume."
         else:
-            reply += "Overall sales volume has maintained steady upward momentum across tracked quarters."
+            reply += "Overall sales volume has maintained steady upward momentum across tracked quarters with no severe single-month drops."
         return {"reply": reply, "tool_calls": tool_calls, "generated_at": datetime.utcnow().isoformat()}
 
     # 10. Recommendations / Next actions
     if intent == "recommendations":
-        kpi_data = sales_analysis_tool(db, user_id)
-        prod_data = product_performance_tool(db, user_id)
-        reg_data = regional_breakdown_tool(db, user_id)
+        kpi_data = sales_analysis_tool(db, user_id) or {}
+        prod_data = product_performance_tool(db, user_id) or {}
+        reg_data = regional_breakdown_tool(db, user_id) or {}
         
         tool_calls.append({"tool_name": "sales_analysis_tool", "arguments": {"user_id": user_id}, "output": kpi_data})
         tool_calls.append({"tool_name": "product_analysis_tool", "arguments": {"user_id": user_id}, "output": prod_data})
         tool_calls.append({"tool_name": "regional_breakdown_tool", "arguments": {"user_id": user_id}, "output": reg_data})
         
-        top_p = prod_data.get("best_product", {}).get("product", "flagship items")
-        low_r = reg_data.get("lowest_region", {}).get("region", "secondary territories")
-        aov = kpi_data.get("average_order_value", 0)
+        best_p = prod_data.get("best_product") or {}
+        top_p = str(best_p.get("product") or kpi_data.get("top_product") or "flagship items")
+        lowest_r = reg_data.get("lowest_region") or {}
+        low_r = str(lowest_r.get("region") or "secondary territories")
+        top_r = str((reg_data.get("top_region") or {}).get("region") or kpi_data.get("top_region") or "primary territory")
+        aov = safe_float(kpi_data.get("average_order_value"), 0.0)
         
         reply = (
             f"Based on your sales data, here are 3 clear recommendations for next month:\n"
-            f"1. **Increase {top_p} sales in the {low_r} region** by running special local discounts.\n"
-            f"2. **Maintain strong sales performance** in your leading territories.\n"
-            f"3. **Stock up on top products** before busy months to avoid running out of inventory."
+            f"1. **Increase {top_p} sales in the {low_r} region** by running targeted promotional discounts.\n"
+            f"2. **Maintain strong sales performance** in your leading {top_r} market where customer demand is highest.\n"
+            f"3. **Stock up on {top_p} inventory** before peak sales periods to prevent stockouts and preserve average order value (${aov:,.2f})."
         )
         return {"reply": reply, "tool_calls": tool_calls, "generated_at": datetime.utcnow().isoformat()}
 
@@ -438,7 +451,7 @@ class AISalesAnalystAgent:
                 Current User Question: "{user_message}"
 
                 Verified Ground-Truth Tool Data:
-                {json.dumps(tool_context, indent=2)}
+                {json.dumps(tool_context, indent=2, default=str)}
 
                 CRITICAL INSTRUCTIONS:
                 1. Use ONLY the exact numbers, products, regions, and metrics provided in the tool data above. NEVER invent, hallucinate, or calculate alternative values.

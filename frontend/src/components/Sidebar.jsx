@@ -4,7 +4,6 @@ import {
   Database, 
   TrendingUp, 
   Bot, 
-  FileText, 
   Sparkles,
   LogOut,
   Layers
@@ -17,7 +16,6 @@ export const NAV_ITEMS = [
   { id: 'prediction', label: 'ML Revenue Prediction', icon: TrendingUp },
   { id: 'ai-intelligence', label: 'AI Intelligence', icon: Sparkles },
   { id: 'ai-agent', label: 'AI Sales Analyst', icon: Bot, badge: 'Agentic' },
-  { id: 'reports', label: 'Executive Reports', icon: FileText },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab }) {
